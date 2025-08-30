@@ -43,31 +43,19 @@ jobs:
 
       - name: Install Komac
         run: |
-          # Get latest Komac release info
-          $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/russellbanks/Komac/releases/latest"
-          $asset = $releaseInfo.assets | Where-Object { $_.name -match "komac.*x86_64.*windows.*\.exe$" }
-
-          if (-not $asset) {
-            Write-Error "Could not find Windows x64 Komac executable in latest release"
-            exit 1
-          }
-
-          $komacUrl = $asset.browser_download_url
-          $komacPath = "$env:TEMP\komac.exe"
-
-          Write-Host "Downloading Komac from: $komacUrl"
-          Invoke-WebRequest -Uri $komacUrl -OutFile $komacPath
+          # Install Komac using WinGet (official recommended method)
+          Write-Host "Installing Komac via WinGet..."
+          winget install komac --accept-source-agreements --accept-package-agreements
 
           # Verify installation
           Write-Host "Verifying Komac installation..."
-          & $komacPath --version
+          komac --version
         shell: pwsh
 
       - name: Publish to WinGet
         run: |
           $tag = "${{ steps.release_info.outputs.tag }}"
           $version = $tag -replace '^v', ''
-          $komacPath = "$env:TEMP\komac.exe"
 
           Write-Host "Publishing version: $version"
           Write-Host "Using tag: $tag"
@@ -89,7 +77,7 @@ jobs:
 
           # Update manifest using Komac
           Write-Host "Running Komac update command..."
-          & $komacPath update --identifier danielmiessler.Fabric --version $version --urls $urls --submit
+          komac update --identifier danielmiessler.Fabric --version $version --urls $urls --submit
 
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Komac update failed with exit code $LASTEXITCODE"
