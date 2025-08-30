@@ -19,7 +19,7 @@ on:
 
 jobs:
   publish-to-winget:
-    runs-on: windows-2025
+    runs-on: ubuntu-latest
 
     steps:
       - name: Extract release information
@@ -34,61 +34,33 @@ jobs:
           fi
         shell: bash
 
-      - name: Checkout winget-pkgs fork
-        uses: actions/checkout@v4
-        with:
-          repository: ksylvan/winget-pkgs
-          token: ${{ secrets.WINGET_TOKEN }}
-          path: winget-pkgs
-
-      - name: Install Komac
+      - name: Get Windows assets from release
+        id: assets
         run: |
-          # Install Komac using WinGet (official recommended method)
-          Write-Host "Installing Komac via WinGet..."
-          winget install komac --accept-source-agreements --accept-package-agreements
+          tag="${{ steps.release_info.outputs.tag }}"
+          version=$(echo "$tag" | sed 's/^v//')
 
-          # Add Komac to PATH (WinGet installs to user-specific location)
-          $komacPath = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\RussellBanks.Komac_Microsoft.Winget.Source_8wekyb3d8bbwe"
-          $env:PATH += ";$komacPath"
-          echo "$komacPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-          # Verify installation
-          Write-Host "Verifying Komac installation..."
-          & "$komacPath\komac.exe" --version
-        shell: pwsh
-
-      - name: Publish to WinGet
-        run: |
-          $tag = "${{ steps.release_info.outputs.tag }}"
-          $version = $tag -replace '^v', ''
-
-          Write-Host "Publishing version: $version"
-          Write-Host "Using tag: $tag"
+          echo "Publishing version: $version"
+          echo "Using tag: $tag"
 
           # Get release info from danielmiessler/fabric
-          $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag"
-          $windowsAssets = $releaseInfo.assets | Where-Object { $_.name -match '\.(exe|msi|msix|appx)$' }
+          release_info=$(curl -s "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag")
 
-          if ($windowsAssets.Count -eq 0) {
-            Write-Host "No Windows installer assets found for $tag, skipping..."
+          # Extract Windows asset URLs
+          urls=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("\\.(exe|msi|msix|appx)$")) | .browser_download_url' | tr '\n' ' ')
+
+          if [ -z "$urls" ]; then
+            echo "No Windows installer assets found for $tag, skipping..."
             exit 0
-          }
+          fi
 
-          $urls = ($windowsAssets | ForEach-Object { $_.browser_download_url }) -join ' '
-          Write-Host "Found Windows assets: $urls"
+          echo "Found Windows assets: $urls"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "urls=$urls" >> $GITHUB_OUTPUT
 
-          # Change to winget-pkgs directory
-          Set-Location winget-pkgs
-
-          # Update manifest using Komac
-          Write-Host "Running Komac update command..."
-          $komacPath = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\RussellBanks.Komac_Microsoft.Winget.Source_8wekyb3d8bbwe"
-          & "$komacPath\komac.exe" update --identifier danielmiessler.Fabric --version $version --urls $urls --submit
-
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Komac update failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
-        shell: pwsh
+      - name: Update WinGet manifest
+        uses: michidk/run-komac@v2
+        with:
+          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.urls }} --submit"
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
