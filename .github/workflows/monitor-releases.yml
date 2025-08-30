@@ -44,8 +44,8 @@ jobs:
           # Get release info from danielmiessler/fabric
           release_info=$(curl -s "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag")
 
-          # Extract Windows asset URLs
-          urls=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("\\.(exe|msi|msix|appx)$")) | .browser_download_url' | tr '\n' ' ')
+          # Extract Windows asset URLs (support both direct executables and archives)
+          urls=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("(_Windows_.*\\.(zip|tar\\.gz)$|\\.(exe|msi|msix|appx)$)")) | .browser_download_url' | tr '\n' ' ')
 
           if [ -z "$urls" ]; then
             echo "No Windows installer assets found for $tag, skipping..."
