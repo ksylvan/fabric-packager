@@ -53,7 +53,7 @@ jobs:
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: danielmiessler.Fabric
-          release-tag: ${{ steps.parse.outputs.tag }}
+          version: ${{ steps.parse.outputs.tag }}
           token: ${{ secrets.WINGET_TOKEN }}
           fork-user: ksylvan
           max-versions-to-keep: 5

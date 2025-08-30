@@ -38,7 +38,7 @@ jobs:
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: danielmiessler.Fabric
-          release-tag: ${{ steps.release_info.outputs.tag }}
+          version: ${{ steps.release_info.outputs.tag }}
           token: ${{ secrets.WINGET_TOKEN }}
           fork-user: ksylvan
           installers-regex: '\.exe$|\.msi$' # Only Windows installers
