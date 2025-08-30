@@ -58,15 +58,23 @@ jobs:
 
       - name: Install Komac
         run: |
-          # Download and install Komac from GitHub releases
-          $komacUrl = "https://github.com/russellbanks/Komac/releases/latest/download/komac-x86_64-pc-windows-msvc.exe"
+          # Get latest Komac release info
+          $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/russellbanks/Komac/releases/latest"
+          $asset = $releaseInfo.assets | Where-Object { $_.name -match "komac.*x86_64.*windows.*\.exe$" }
+
+          if (-not $asset) {
+            Write-Error "Could not find Windows x64 Komac executable in latest release"
+            exit 1
+          }
+
+          $komacUrl = $asset.browser_download_url
           $komacPath = "$env:TEMP\komac.exe"
+
+          Write-Host "Downloading Komac from: $komacUrl"
           Invoke-WebRequest -Uri $komacUrl -OutFile $komacPath
 
-          # Add to PATH for this session
-          $env:PATH = "$env:TEMP;$env:PATH"
-
           # Verify installation
+          Write-Host "Verifying Komac installation..."
           & $komacPath --version
         shell: pwsh
 
