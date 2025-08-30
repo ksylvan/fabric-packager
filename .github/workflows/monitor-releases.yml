@@ -14,7 +14,7 @@ on:
 
 jobs:
   check-and-publish:
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
       - name: Check latest Fabric release

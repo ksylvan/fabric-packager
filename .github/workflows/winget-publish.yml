@@ -19,7 +19,7 @@ on:
 
 jobs:
   publish-to-winget:
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
       - name: Extract release information
