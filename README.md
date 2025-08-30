@@ -4,19 +4,13 @@ Automated publishing of [Fabric](https://github.com/danielmiessler/fabric) relea
 
 ## Overview
 
-This repository contains GitHub Actions workflows that automatically monitor Fabric releases and publish them to WinGet through the [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) repository using [Komac](https://github.com/russellbanks/Komac), the modern WinGet manifest creation tool.
+This repository contains GitHub Actions workflows that automatically monitor Fabric releases and publish them to WinGet using the [michidk/run-komac](https://github.com/michidk/run-komac) action. This action handles all the complexity of installing [Komac](https://github.com/russellbanks/Komac), finding Windows installers, and submitting manifests to the [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) repository.
 
 ## Setup Required
 
 Before the workflows can function, you need to complete these setup steps:
 
-### 1. Fork microsoft/winget-pkgs
-
-1. Navigate to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs)
-2. Click "Fork" in the top-right corner
-3. Fork to your account (keep the name `winget-pkgs`)
-
-### 2. Create Personal Access Token
+### 1. Create Personal Access Token
 
 1. Go to [GitHub Settings → Developer settings → Personal access tokens](https://github.com/settings/tokens)
 2. Click "Generate new token (classic)"
@@ -24,64 +18,60 @@ Before the workflows can function, you need to complete these setup steps:
 4. Scope: `public_repo`
 5. Generate and copy the token
 
-### 3. Add Repository Secret
+### 2. Add Repository Secret
 
 1. In this repository, go to Settings → Secrets and variables → Actions
 2. Click "New repository secret"
 3. Name: `WINGET_TOKEN`
-4. Value: Your personal access token from step 2
+4. Value: Your personal access token from step 1
 
-### 4. Update Repository Names
+**That's it!** The `run-komac` action handles everything else automatically, including:
 
-Update the repository reference in all workflow files to match your GitHub username:
-
-In all three workflow files, change:
-
-```yaml
-repository: ksylvan/winget-pkgs
-```
-
-to:
-
-```yaml
-repository: YOUR_USERNAME/winget-pkgs
-```
+- Forking microsoft/winget-pkgs (if needed)
+- Installing Komac
+- Creating and submitting pull requests
 
 ## How It Works
 
-All workflows use the same reliable process:
+All workflows use a simple, reliable process:
 
-1. **Checkout your winget-pkgs fork** - Direct access to your forked repository
-2. **Install Komac** - Modern WinGet manifest creation tool written in Rust
-3. **Fetch release information** - Direct API calls to `danielmiessler/fabric`
-4. **Find Windows assets** - Automatically detects `.exe`, `.msi`, `.msix`, `.appx` files
-5. **Update and submit manifest** - Uses Komac to update WinGet manifest and create PR
+1. **Parse release information** - Extract version and tag from Fabric releases
+2. **Find Windows assets** - Automatically detect `.exe`, `.msi`, `.msix`, `.appx` installer files
+3. **Update WinGet manifest** - Use the [run-komac action](https://github.com/michidk/run-komac) to handle everything automatically
+
+The `michidk/run-komac` action handles all the complexity:
+
+- Downloads and installs Komac
+- Manages winget-pkgs repository interactions
+- Creates and submits pull requests to microsoft/winget-pkgs
+- Handles authentication and error reporting
 
 ## Workflows
 
 ### 1. Monitor Releases (`monitor-releases.yml`) - Recommended
 
-Automatically checks for new Fabric releases every 6 hours.
+Automatically checks for new Fabric releases every 6 hours and publishes them.
 
-- **Schedule**: Runs every 6 hours via cron (`0 */6 * * *`)
-- **Manual trigger**: Can be triggered manually with optional version parameter
-- **Function**: Checks for latest Fabric release and publishes to WinGet automatically
+- **Runs on**: Ubuntu runners (fast and reliable)
+- **Schedule**: Every 6 hours via cron (`0 */6 * * *`)
+- **Manual trigger**: Optional version parameter
+- **Process**: Checks GitHub API → Finds Windows assets → Submits to WinGet
 
 ### 2. Manual Publishing (`manual-publish.yml`)
 
-User-friendly manual publishing with URL input.
+User-friendly manual publishing for specific releases.
 
-- **Manual trigger**: Accepts GitHub release URL as input
-- **Version extraction**: Automatically extracts version from URL
-- **Function**: Publishes any specific release to WinGet
+- **Runs on**: Ubuntu runners
+- **Input**: GitHub release URL (e.g., `https://github.com/danielmiessler/fabric/releases/tag/v1.4.302`)
+- **Process**: Extracts version → Finds Windows assets → Submits to WinGet
 
 ### 3. Webhook Publishing (`winget-publish.yml`)
 
-Immediate response to releases via webhook integration.
+Immediate publishing triggered by external webhooks.
 
-- **Repository dispatch**: Triggered by external webhook from Fabric repository
-- **Manual trigger**: Can be triggered manually with release tag input
-- **Function**: Immediate publishing when Fabric creates new releases
+- **Runs on**: Ubuntu runners
+- **Triggers**: Repository dispatch events or manual trigger with tag
+- **Process**: Uses provided tag → Finds Windows assets → Submits to WinGet
 
 ## Usage
 
@@ -119,8 +109,7 @@ To trigger immediate publishing from the main Fabric repository, add this step t
 ## Prerequisites
 
 - Fabric must already exist in WinGet (at least one version manually submitted)
-- Fabric releases must include Windows binaries (`.exe`, `.msi`, or `.zip`)
-- GitHub fork of microsoft/winget-pkgs repository
+- Fabric releases must include Windows installer files (`.exe`, `.msi`, `.msix`, `.appx`)
 - Personal Access Token with `public_repo` scope
 
 ## Troubleshooting
@@ -128,20 +117,22 @@ To trigger immediate publishing from the main Fabric repository, add this step t
 ### Common Issues
 
 1. **"Package not found" error**
-   - Ensure Fabric exists in winget-pkgs repository
-   - First version must be manually submitted
+   - Ensure Fabric already exists in WinGet (run `winget search danielmiessler.fabric`)
+   - If not found, the first version must be manually submitted to winget-pkgs
 
-2. **"Unauthorized" error**
-   - Check that `WINGET_TOKEN` secret is set correctly
+2. **"Unauthorized" or "Authentication" error**
+   - Check that `WINGET_TOKEN` secret is set correctly in repository settings
    - Verify token has `public_repo` scope and hasn't expired
+   - Ensure you're using a classic Personal Access Token (not fine-grained)
 
-3. **"Fork not found" error**
-   - Verify you've forked microsoft/winget-pkgs
-   - Check `fork-user` parameter matches your GitHub username
+3. **"No Windows installer assets found" message**
+   - Verify the Fabric release contains Windows installer files
+   - Supported formats: `.exe`, `.msi`, `.msix`, `.appx`
+   - Check the release assets in the GitHub release page
 
-4. **"No matching installers" error**
-   - Verify Fabric release contains Windows binaries
-   - Check release assets include `.exe`, `.msi`, or `.zip` files
+4. **Workflow fails silently**
+   - Check the Actions tab for detailed error logs
+   - Ensure the release tag format matches expectations (e.g., `v1.4.302`)
 
 ### Testing
 
@@ -162,24 +153,32 @@ winget install danielmiessler.Fabric
 
 ### Key Components
 
-- **Komac**: Modern WinGet manifest creation tool written in Rust
-- **Repository**: Your fork of `microsoft/winget-pkgs`
+- **run-komac Action**: [michidk/run-komac@v2](https://github.com/michidk/run-komac) - Handles all Komac operations automatically
+- **Komac**: Modern WinGet manifest creation tool written in Rust (installed by the action)
 - **Package identifier**: `danielmiessler.Fabric`
 - **Supported formats**: `.exe`, `.msi`, `.msix`, `.appx` installer files
 
 ### Workflow Environment
 
-All workflows run on `windows-latest` runners and use:
+All workflows run on `ubuntu-latest` runners for:
 
-- PowerShell for Windows-specific operations
-- Bash for cross-platform scripting
-- Komac CLI for WinGet manifest operations
+- **Speed**: Ubuntu runners start faster than Windows
+- **Reliability**: More stable and predictable environment
+- **Simplicity**: No Windows-specific PATH or installation issues
+- **Cost**: Ubuntu runners are more cost-effective
+
+### Version Management
+
+- **All versions are retained** by default in the WinGet repository
+- Users can install any published version: `winget install danielmiessler.Fabric --version 1.4.302`
+- No automatic cleanup of old versions (standard WinGet practice)
 
 ## References
 
 ### Tools Used
 
-- [Komac](https://github.com/russellbanks/Komac) - Modern WinGet manifest creation tool
+- [run-komac Action](https://github.com/michidk/run-komac) - GitHub Action that runs Komac automatically
+- [Komac](https://github.com/russellbanks/Komac) - Modern WinGet manifest creation tool (used by the action)
 - [Microsoft WinGet CLI](https://github.com/microsoft/winget-cli) - Windows Package Manager
 
 ### Documentation
