@@ -40,3 +40,4 @@ jobs:
           token: ${{ secrets.WINGET_TOKEN }}
           fork-user: ksylvan
           max-versions-to-keep: 5 # Keep only 5 latest versions
+          release-repository: danielmiessler/fabric

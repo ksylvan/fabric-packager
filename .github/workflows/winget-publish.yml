@@ -43,3 +43,4 @@ jobs:
           fork-user: ksylvan
           installers-regex: '\.exe$|\.msi$' # Only Windows installers
           max-versions-to-keep: 5
+          release-repository: danielmiessler/fabric

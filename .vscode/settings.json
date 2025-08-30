@@ -1,0 +1,12 @@
+{
+	"github-actions.workflows.pinned.workflows": [
+		".github/workflows/manual-publish.yml",
+		".github/workflows/monitor-releases.yml",
+		".github/workflows/winget-publish.yml"
+	],
+	"yaml.schemas": {
+		"https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+	},
+	"yaml.validate": true,
+	"yaml.schemaStore.enable": true
+}

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Manual WinGet Publishing
 
 on:
@@ -56,3 +57,4 @@ jobs:
           token: ${{ secrets.WINGET_TOKEN }}
           fork-user: ksylvan
           max-versions-to-keep: 5
+          release-repository: danielmiessler/fabric
