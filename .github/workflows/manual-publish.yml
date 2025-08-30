@@ -46,6 +46,7 @@ jobs:
 
           echo "Publishing version: ${{ steps.parse.outputs.tag }}"
           echo "From release URL: ${{ steps.parse.outputs.url }}"
+        shell: bash
 
       - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@v2
