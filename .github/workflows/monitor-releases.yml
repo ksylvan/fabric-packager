@@ -45,9 +45,14 @@ jobs:
           Write-Host "Installing Komac via WinGet..."
           winget install komac --accept-source-agreements --accept-package-agreements
 
+          # Add Komac to PATH (WinGet installs to user-specific location)
+          $komacPath = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\RussellBanks.Komac_Microsoft.Winget.Source_8wekyb3d8bbwe"
+          $env:PATH += ";$komacPath"
+          echo "$komacPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
           # Verify installation
           Write-Host "Verifying Komac installation..."
-          komac --version
+          & "$komacPath\komac.exe" --version
         shell: pwsh
 
       - name: Publish to WinGet
@@ -75,7 +80,8 @@ jobs:
 
           # Update manifest using Komac
           Write-Host "Running Komac update command..."
-          komac update --identifier danielmiessler.Fabric --version $version --urls $urls --submit
+          $komacPath = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\RussellBanks.Komac_Microsoft.Winget.Source_8wekyb3d8bbwe"
+          & "$komacPath\komac.exe" update --identifier danielmiessler.Fabric --version $version --urls $urls --submit
 
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Komac update failed with exit code $LASTEXITCODE"
