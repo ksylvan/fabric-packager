@@ -1,3 +1,13 @@
 {
-	"ignorePaths": [".github/workflows/**"]
+	"ignorePaths": [
+		".github/workflows/**"
+	],
+	"words": [
+		"danielmiessler",
+		"Komac",
+		"ksylvan",
+		"msix",
+		"pkgs",
+		"winget"
+	]
 }

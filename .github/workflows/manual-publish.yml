@@ -49,12 +49,37 @@ jobs:
           echo "From release URL: ${{ steps.parse.outputs.url }}"
         shell: bash
 
-      - name: Publish to WinGet
-        uses: vedantmgoyal9/winget-releaser@v2
+      - name: Checkout winget-pkgs fork
+        uses: actions/checkout@v4
         with:
-          identifier: danielmiessler.Fabric
-          version: ${{ steps.parse.outputs.tag }}
+          repository: ksylvan/winget-pkgs
           token: ${{ secrets.WINGET_TOKEN }}
-          fork-user: ksylvan
-          max-versions-to-keep: 5
-          release-repository: danielmiessler/fabric
+          path: winget-pkgs
+
+      - name: Install Komac
+        run: |
+          cargo binstall komac -y
+        shell: pwsh
+
+      - name: Update WinGet manifest
+        run: |
+          $tag = "${{ steps.parse.outputs.tag }}"
+          $version = $tag -replace '^v', ''
+          
+          # Get release info from danielmiessler/fabric
+          $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag"
+          $windowsAssets = $releaseInfo.assets | Where-Object { $_.name -match '\.(exe|msi|msix|appx)$' }
+          
+          if ($windowsAssets.Count -eq 0) {
+            Write-Error "No Windows installer assets found for $tag"
+            exit 1
+          }
+          
+          $urls = ($windowsAssets | ForEach-Object { $_.browser_download_url }) -join ' '
+          Write-Host "Found Windows assets: $urls"
+          
+          # Update manifest using Komac
+          komac update --identifier danielmiessler.Fabric --version $version --urls $urls --submit
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}

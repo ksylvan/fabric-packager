@@ -4,7 +4,7 @@ Automated publishing of [Fabric](https://github.com/danielmiessler/fabric) relea
 
 ## Overview
 
-This repository contains GitHub Actions workflows that automatically monitor Fabric releases and publish them to WinGet through the [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) repository.
+This repository contains GitHub Actions workflows that automatically monitor Fabric releases and publish them to WinGet through the [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) repository using [Komac](https://github.com/russellbanks/Komac), the modern WinGet manifest creation tool.
 
 ## Setup Required
 
@@ -31,41 +31,57 @@ Before the workflows can function, you need to complete these setup steps:
 3. Name: `WINGET_TOKEN`
 4. Value: Your personal access token from step 2
 
-### 4. Update Fork Username
+### 4. Update Repository Names
 
-Update the `fork-user` parameter in all workflow files to match your GitHub username:
+Update the repository reference in all workflow files to match your GitHub username:
 
-- `.github/workflows/monitor-releases.yml`
-- `.github/workflows/winget-publish.yml`  
-- `.github/workflows/manual-publish.yml`
+In all three workflow files, change:
 
-Change `fork-user: ksylvan` to `fork-user: YOUR_USERNAME`
+```yaml
+repository: ksylvan/winget-pkgs
+```
+
+to:
+
+```yaml
+repository: YOUR_USERNAME/winget-pkgs
+```
+
+## How It Works
+
+All workflows use the same reliable process:
+
+1. **Checkout your winget-pkgs fork** - Direct access to your forked repository
+2. **Install Komac** - Modern WinGet manifest creation tool written in Rust
+3. **Fetch release information** - Direct API calls to `danielmiessler/fabric`
+4. **Find Windows assets** - Automatically detects `.exe`, `.msi`, `.msix`, `.appx` files
+5. **Update and submit manifest** - Uses Komac to update WinGet manifest and create PR
 
 ## Workflows
 
-### 1. Monitor Releases (`monitor-releases.yml`)
+### 1. Monitor Releases (`monitor-releases.yml`) - Recommended
 
-**Recommended approach** - Automatically checks for new Fabric releases every 6 hours.
+Automatically checks for new Fabric releases every 6 hours.
 
-- **Schedule**: Runs every 6 hours via cron
+- **Schedule**: Runs every 6 hours via cron (`0 */6 * * *`)
 - **Manual trigger**: Can be triggered manually with optional version parameter
-- **Function**: Checks for latest Fabric release and publishes to WinGet
+- **Function**: Checks for latest Fabric release and publishes to WinGet automatically
 
-### 2. Webhook Publishing (`winget-publish.yml`)
+### 2. Manual Publishing (`manual-publish.yml`)
 
-Immediate response to releases via webhook or manual trigger.
+User-friendly manual publishing with URL input.
 
-- **Repository dispatch**: Triggered by external webhook
-- **Manual trigger**: Requires release tag input
-- **Function**: Publishes specific release to WinGet
-
-### 3. Manual Publishing (`manual-publish.yml`)
-
-Backup method for manual publishing with user-friendly inputs.
-
-- **Manual trigger**: Accepts GitHub release URL
+- **Manual trigger**: Accepts GitHub release URL as input
 - **Version extraction**: Automatically extracts version from URL
-- **Function**: Publishes any release to WinGet
+- **Function**: Publishes any specific release to WinGet
+
+### 3. Webhook Publishing (`winget-publish.yml`)
+
+Immediate response to releases via webhook integration.
+
+- **Repository dispatch**: Triggered by external webhook from Fabric repository
+- **Manual trigger**: Can be triggered manually with release tag input
+- **Function**: Immediate publishing when Fabric creates new releases
 
 ## Usage
 
@@ -142,33 +158,40 @@ winget show danielmiessler.Fabric
 winget install danielmiessler.Fabric
 ```
 
-## Configuration
+## Technical Details
 
-### Workflow Parameters
+### Key Components
 
-All workflows support these common parameters:
+- **Komac**: Modern WinGet manifest creation tool written in Rust
+- **Repository**: Your fork of `microsoft/winget-pkgs`
+- **Package identifier**: `danielmiessler.Fabric`
+- **Supported formats**: `.exe`, `.msi`, `.msix`, `.appx` installer files
 
-- `identifier`: `danielmiessler.Fabric` (WinGet package identifier)
-- `token`: `${{ secrets.WINGET_TOKEN }}` (GitHub PAT)
-- `fork-user`: Your GitHub username
-- `max-versions-to-keep`: `5` (Retain only 5 latest versions)
+### Workflow Environment
 
-### Installer Filtering
+All workflows run on `windows-latest` runners and use:
 
-The webhook workflow includes installer filtering:
-
-```yaml
-installers-regex: '\.exe$|\.msi$'  # Only .exe and .msi files
-```
-
-Adjust this pattern if Fabric uses different installer formats.
+- PowerShell for Windows-specific operations
+- Bash for cross-platform scripting
+- Komac CLI for WinGet manifest operations
 
 ## References
 
-- [WinGet-Releaser Action](https://github.com/vedantmgoyal9/winget-releaser)
+### Tools Used
+
+- [Komac](https://github.com/russellbanks/Komac) - Modern WinGet manifest creation tool
+- [Microsoft WinGet CLI](https://github.com/microsoft/winget-cli) - Windows Package Manager
+
+### Documentation
+
 - [Microsoft WinGet Documentation](https://learn.microsoft.com/en-us/windows/package-manager/)
-- [Fabric Repository](https://github.com/danielmiessler/fabric)
-- [WinGet Package Repository](https://github.com/microsoft/winget-pkgs)
+- [WinGet Package Submission Guidelines](https://learn.microsoft.com/en-us/windows/package-manager/package/)
+- [WinGet Manifest Schema](https://learn.microsoft.com/en-us/windows/package-manager/package/manifest)
+
+### Repositories
+
+- [Fabric Repository](https://github.com/danielmiessler/fabric) - Source project
+- [WinGet Package Repository](https://github.com/microsoft/winget-pkgs) - Official package repository
 
 ## License
 
