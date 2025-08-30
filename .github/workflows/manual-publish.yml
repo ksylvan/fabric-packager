@@ -1,0 +1,57 @@
+name: Manual WinGet Publishing
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_url:
+        description: "GitHub Release URL (e.g., https://github.com/danielmiessler/fabric/releases/tag/v1.4.302)"
+        required: true
+        type: string
+      version:
+        description: "Version to publish (optional, will be extracted from URL if not provided)"
+        required: false
+        type: string
+
+jobs:
+  manual-publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Parse Release Information
+        id: parse
+        run: |
+          URL="${{ github.event.inputs.release_url }}"
+          VERSION="${{ github.event.inputs.version }}"
+
+          # Extract tag from URL if version not provided
+          if [ -z "$VERSION" ]; then
+            # Extract tag from URL like https://github.com/danielmiessler/fabric/releases/tag/v1.4.302
+            TAG=$(echo $URL | sed 's/.*\/tag\///')
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "Using extracted tag: $TAG"
+          else
+            echo "tag=$VERSION" >> $GITHUB_OUTPUT
+            echo "Using provided version: $VERSION"
+          fi
+
+          echo "url=$URL" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Validate Inputs
+        run: |
+          if [ -z "${{ steps.parse.outputs.tag }}" ]; then
+            echo "Error: Could not determine version/tag to publish"
+            exit 1
+          fi
+
+          echo "Publishing version: ${{ steps.parse.outputs.tag }}"
+          echo "From release URL: ${{ steps.parse.outputs.url }}"
+
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: danielmiessler.Fabric
+          release-tag: ${{ steps.parse.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+          fork-user: ksylvan
+          max-versions-to-keep: 5

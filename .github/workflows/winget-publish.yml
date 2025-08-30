@@ -1,0 +1,45 @@
+name: Publish Fabric to WinGet on Release
+
+on:
+  # Triggered via repository_dispatch from upstream
+  repository_dispatch:
+    types: [fabric-release]
+
+  # Manual trigger as backup
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.4.302)"
+        required: true
+        type: string
+      url:
+        description: "Release URL (optional)"
+        required: false
+        type: string
+
+jobs:
+  publish-to-winget:
+    runs-on: windows-latest
+
+    steps:
+      - name: Extract release information
+        id: release_info
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "tag=${{ github.event.client_payload.tag }}" >> $GITHUB_OUTPUT
+            echo "url=${{ github.event.client_payload.url }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+            echo "url=${{ github.event.inputs.url }}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: danielmiessler.Fabric
+          release-tag: ${{ steps.release_info.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+          fork-user: ksylvan
+          installers-regex: '\.exe$|\.msi$' # Only Windows installers
+          max-versions-to-keep: 5
