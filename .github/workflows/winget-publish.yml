@@ -53,19 +53,19 @@ jobs:
 
           # Count available architectures
           arch_count=0
-          urls=""
+          all_urls=""
           if [ -n "$arm64_url" ]; then
-            urls="$urls $arm64_url"
+            all_urls="$all_urls $arm64_url"
             arch_count=$((arch_count + 1))
             echo "Found ARM64 Windows asset: $arm64_url"
           fi
           if [ -n "$x64_url" ]; then
-            urls="$urls $x64_url"
+            all_urls="$all_urls $x64_url"
             arch_count=$((arch_count + 1))
             echo "Found x64 Windows asset: $x64_url"
           fi
           if [ -n "$i386_url" ]; then
-            urls="$urls $i386_url"
+            all_urls="$all_urls $i386_url"
             arch_count=$((arch_count + 1))
             echo "Found i386 Windows asset: $i386_url"
           fi
@@ -80,35 +80,11 @@ jobs:
           echo "arm64_url=$arm64_url" >> $GITHUB_OUTPUT
           echo "x64_url=$x64_url" >> $GITHUB_OUTPUT
           echo "i386_url=$i386_url" >> $GITHUB_OUTPUT
-          echo "urls=$(echo $urls | xargs)" >> $GITHUB_OUTPUT
+          echo "urls=$(echo $all_urls | xargs)" >> $GITHUB_OUTPUT
 
-      - name: Update WinGet manifest (ARM64)
-        if: steps.assets.outputs.arm64_url != ''
+      - name: Update WinGet manifest with all architectures
         uses: michidk/run-komac@v2
         with:
-          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.arm64_url }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
-
-      - name: Update WinGet manifest (x64)
-        if: steps.assets.outputs.x64_url != ''
-        uses: michidk/run-komac@v2
-        with:
-          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.x64_url }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
-
-      - name: Update WinGet manifest (i386)
-        if: steps.assets.outputs.i386_url != ''
-        uses: michidk/run-komac@v2
-        with:
-          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.i386_url }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
-
-      - name: Submit WinGet manifest
-        uses: michidk/run-komac@v2
-        with:
-          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --submit"
+          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.urls }} --submit"
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
