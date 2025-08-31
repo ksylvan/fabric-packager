@@ -61,21 +61,69 @@ jobs:
           # Get release info from danielmiessler/fabric
           release_info=$(curl -s "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag")
 
-          # Extract Windows asset URLs
-          urls=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("\\.(exe|msi|msix|appx)$")) | .browser_download_url' | tr '\n' ' ')
+          # Extract Windows asset URLs by architecture for better detection
+          arm64_url=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("_Windows_arm64\\.(zip|exe|msi|msix|appx)$")) | .browser_download_url')
+          x64_url=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("_Windows_x86_64\\.(zip|exe|msi|msix|appx)$")) | .browser_download_url')
+          i386_url=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("_Windows_i386\\.(zip|exe|msi|msix|appx)$")) | .browser_download_url')
 
-          if [ -z "$urls" ]; then
+          # Count available architectures
+          arch_count=0
+          urls=""
+          if [ -n "$arm64_url" ]; then
+            urls="$urls $arm64_url"
+            arch_count=$((arch_count + 1))
+            echo "Found ARM64 Windows asset: $arm64_url"
+          fi
+          if [ -n "$x64_url" ]; then
+            urls="$urls $x64_url"
+            arch_count=$((arch_count + 1))
+            echo "Found x64 Windows asset: $x64_url"
+          fi
+          if [ -n "$i386_url" ]; then
+            urls="$urls $i386_url"
+            arch_count=$((arch_count + 1))
+            echo "Found i386 Windows asset: $i386_url"
+          fi
+
+          if [ $arch_count -eq 0 ]; then
             echo "No Windows installer assets found for $tag"
             exit 1
           fi
 
-          echo "Found Windows assets: $urls"
+          echo "Found $arch_count Windows architectures"
           echo "version=$version" >> $GITHUB_OUTPUT
-          echo "urls=$urls" >> $GITHUB_OUTPUT
+          echo "arm64_url=$arm64_url" >> $GITHUB_OUTPUT
+          echo "x64_url=$x64_url" >> $GITHUB_OUTPUT
+          echo "i386_url=$i386_url" >> $GITHUB_OUTPUT
+          echo "urls=$(echo $urls | xargs)" >> $GITHUB_OUTPUT
 
-      - name: Update WinGet manifest
+      - name: Update WinGet manifest (ARM64)
+        if: steps.assets.outputs.arm64_url != ''
         uses: michidk/run-komac@v2
         with:
-          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.urls }} --submit"
+          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.arm64_url }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Update WinGet manifest (x64)
+        if: steps.assets.outputs.x64_url != ''
+        uses: michidk/run-komac@v2
+        with:
+          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.x64_url }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Update WinGet manifest (i386)
+        if: steps.assets.outputs.i386_url != ''
+        uses: michidk/run-komac@v2
+        with:
+          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.i386_url }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Submit WinGet manifest
+        uses: michidk/run-komac@v2
+        with:
+          args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --submit"
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
