@@ -3,7 +3,7 @@ name: Publish Fabric to WinGet on Release
 on:
   # Triggered via repository_dispatch from upstream
   repository_dispatch:
-    types: [fabric-release]
+    types: [fabric-winget-release]
 
   # Manual trigger as backup
   workflow_dispatch:

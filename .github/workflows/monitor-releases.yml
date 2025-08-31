@@ -2,8 +2,8 @@ name: Monitor and Publish Fabric Releases to WinGet
 
 on:
   schedule:
-    # Check every 6 hours for new releases
-    - cron: "0 */6 * * *"
+    # Check every 3 hours for new releases
+    - cron: "13 */3 * * *"
 
   workflow_dispatch:
     inputs:

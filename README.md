@@ -1,6 +1,6 @@
-# Fabric WinGet Publisher
+# Fabric Packager
 
-Automated publishing of [Fabric](https://github.com/danielmiessler/fabric) releases to the Windows Package Manager (WinGet).
+Auxiliary packaging tools for the [Fabric CLI](https://github.com/danielmiessler/fabric), providing automated distribution to various package managers. Currently supports automated publishing to the Windows Package Manager (WinGet).
 
 ## Overview
 
@@ -96,9 +96,9 @@ To trigger immediate publishing from the main Fabric repository, add this step t
     curl -X POST \
       -H "Authorization: token ${{ secrets.WINGET_DISPATCH_TOKEN }}" \
       -H "Accept: application/vnd.github.v3+json" \
-      https://api.github.com/repos/YOUR_USERNAME/fabric-winget/dispatches \
+      https://api.github.com/repos/YOUR_USERNAME/fabric-packager/dispatches \
       -d '{
-        "event_type": "fabric-release",
+        "event_type": "fabric-winget-release",
         "client_payload": {
           "tag": "${{ github.ref_name }}",
           "url": "${{ github.event.release.html_url }}"
