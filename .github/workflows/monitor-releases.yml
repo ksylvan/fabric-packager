@@ -100,11 +100,12 @@ jobs:
             const tag = "${{ github.event.inputs.version || steps.check_release.outputs.tag }}";
             const url = "${{ steps.check_release.outputs.url }}";
 
-            await github.rest.repos.createDispatchEvent({
+            await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              event_type: 'fabric-docker-release',
-              client_payload: {
+              workflow_id: 'docker-publish.yml',
+              ref: 'main',
+              inputs: {
                 tag: tag,
                 url: url
               }
