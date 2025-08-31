@@ -23,6 +23,7 @@ jobs:
 
     outputs:
       is_latest: ${{ steps.latest.outputs.is_latest }}
+      current_tag: ${{ steps.latest.outputs.current_tag }}
       owner_lc: ${{ steps.vars.outputs.owner_lc }}
       repo_lc: ${{ steps.vars.outputs.repo_lc }}
       dockerhub_user_lc: ${{ steps.dh.outputs.user_lc }}
@@ -172,13 +173,11 @@ jobs:
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ steps.vars.outputs.repo_lc }}
             docker.io/${{ steps.dh.outputs.user_lc }}/${{ steps.vars.outputs.repo_lc }}
           tags: |
-            type=ref,event=tag                        # v1.4.300
-            type=semver,pattern={{version}}           # 1.4.300 (optional)
-            type=semver,pattern={{major}}.{{minor}}   # 1.4 (optional)
+            type=raw,value=${{ steps.parse.outputs.tag }}
+            type=semver,pattern={{version}},value=${{ steps.parse.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.parse.outputs.tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/danielmiessler/fabric
-        env:
-          GITHUB_REF_NAME: ${{ steps.parse.outputs.tag }}
 
       - name: Build and push (multi-arch)
         if: steps.check_exists.outputs.skip != 'true'
@@ -223,14 +222,14 @@ jobs:
 
       - name: Tag :latest on GHCR
         run: |
-          tag="${{ needs.manual-docker-publish.outputs.latest_tag }}"
+          tag="${{ needs.manual-docker-publish.outputs.current_tag }}"
           SRC="ghcr.io/${{ needs.manual-docker-publish.outputs.owner_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:$tag"
           DST="ghcr.io/${{ needs.manual-docker-publish.outputs.owner_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:latest"
           docker buildx imagetools create -t "$DST" "$SRC"
 
       - name: Tag :latest on Docker Hub
         run: |
-          tag="${{ needs.manual-docker-publish.outputs.latest_tag }}"
+          tag="${{ needs.manual-docker-publish.outputs.current_tag }}"
           SRC="docker.io/${{ needs.manual-docker-publish.outputs.dockerhub_user_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:$tag"
           DST="docker.io/${{ needs.manual-docker-publish.outputs.dockerhub_user_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:latest"
           docker buildx imagetools create -t "$DST" "$SRC"

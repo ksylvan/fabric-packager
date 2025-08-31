@@ -160,13 +160,11 @@ jobs:
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ steps.vars.outputs.repo_lc }}
             docker.io/${{ steps.dh.outputs.user_lc }}/${{ steps.vars.outputs.repo_lc }}
           tags: |
-            type=ref,event=tag                        # v1.4.300
-            type=semver,pattern={{version}}           # 1.4.300 (optional)
-            type=semver,pattern={{major}}.{{minor}}   # 1.4 (optional)
+            type=raw,value=${{ steps.release_info.outputs.tag }}
+            type=semver,pattern={{version}},value=${{ steps.release_info.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.release_info.outputs.tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/danielmiessler/fabric
-        env:
-          GITHUB_REF_NAME: ${{ steps.release_info.outputs.tag }}
 
       - name: Build and push (multi-arch)
         if: steps.check_exists.outputs.skip != 'true'
