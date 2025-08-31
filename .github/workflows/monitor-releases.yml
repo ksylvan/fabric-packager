@@ -1,4 +1,4 @@
-name: Monitor and Publish Fabric Releases to WinGet
+name: Monitor and Publish Fabric Releases
 
 on:
   schedule:
@@ -48,17 +48,63 @@ jobs:
           urls=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("(_Windows_.*\\.(zip|tar\\.gz)$|\\.(exe|msi|msix|appx)$)")) | .browser_download_url' | tr '\n' ' ')
 
           if [ -z "$urls" ]; then
-            echo "No Windows installer assets found for $tag, skipping..."
-            exit 0
+            echo "No Windows installer assets found for $tag, skipping WinGet..."
+            echo "winget_skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Found Windows assets: $urls"
+            echo "winget_skip=false" >> $GITHUB_OUTPUT
           fi
 
-          echo "Found Windows assets: $urls"
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "urls=$urls" >> $GITHUB_OUTPUT
 
       - name: Update WinGet manifest
+        if: steps.assets.outputs.winget_skip != 'true'
         uses: michidk/run-komac@v2
         with:
           args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.urls }} --submit"
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Check if Docker images already exist
+        id: docker_check
+        run: |
+          tag="${{ github.event.inputs.version || steps.check_release.outputs.tag }}"
+
+          # Check GHCR
+          ghcr_exists=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://ghcr.io/v2/danielmiessler/fabric/manifests/$tag" || echo "404")
+
+          # Check Docker Hub
+          dh_exists=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/danielmiessler/fabric/tags/$tag" || echo "404")
+
+          if [ "$ghcr_exists" = "200" ] && [ "$dh_exists" = "200" ]; then
+            echo "Docker images for $tag already exist in both registries, skipping..."
+            echo "docker_skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Docker images for $tag missing from at least one registry, proceeding..."
+            echo "docker_skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger Docker Publishing
+        if: steps.docker_check.outputs.docker_skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tag = "${{ github.event.inputs.version || steps.check_release.outputs.tag }}";
+            const url = "${{ steps.check_release.outputs.url }}";
+
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'fabric-docker-release',
+              client_payload: {
+                tag: tag,
+                url: url
+              }
+            });
+
+            console.log(`Triggered Docker publishing for ${tag}`);

@@ -2,6 +2,9 @@
 	"ignorePaths": [".github/workflows/**"],
 	"words": [
 		"danielmiessler",
+		"dockerhub",
+		"DOCKERHUB",
+		"GHCR",
 		"Komac",
 		"ksylvan",
 		"michidk",
