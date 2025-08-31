@@ -42,7 +42,10 @@ Before the workflows can function, you need to complete these setup steps:
 
 **GitHub Container Registry (GHCR):**
 
-- Uses the built-in `GITHUB_TOKEN` - no additional setup required
+Since we're publishing to a cross-repository package (`ksylvan/fabric` from `fabric-packager`), you need:
+
+1. Create a Personal Access Token with `packages:write` and `packages:read` scopes
+2. Add repository secret: `GHCR_TOKEN` with your PAT value
 
 **That's it!** The workflows handle everything else automatically:
 
