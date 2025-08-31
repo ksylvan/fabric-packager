@@ -70,15 +70,18 @@ jobs:
         id: check_exists
         run: |
           tag="${{ steps.parse.outputs.tag }}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
 
+          # Check if we already published this tag to avoid rebuilding
           # Check GHCR
           ghcr_exists=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://ghcr.io/v2/danielmiessler/fabric/manifests/$tag" || echo "404")
+            "https://ghcr.io/v2/${owner}/fabric/manifests/$tag" || echo "404")
 
-          # Check Docker Hub
+          # Check Docker Hub (use configured Docker Hub username)
+          dh_user="${{ vars.DOCKERHUB_USERNAME }}"
           dh_exists=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://hub.docker.com/v2/repositories/danielmiessler/fabric/tags/$tag" || echo "404")
+            "https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag" || echo "404")
 
           if [ "$ghcr_exists" = "200" ] && [ "$dh_exists" = "200" ]; then
             echo "Tag $tag already exists in both registries, skipping..."
@@ -117,7 +120,7 @@ jobs:
         if: steps.check_exists.outputs.skip != 'true'
         id: vars
         run: |
-          OWNER="danielmiessler"
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
           REPO="fabric"
           echo "owner_lc=${OWNER,,}" >> "$GITHUB_OUTPUT"
           echo "repo_lc=${REPO,,}" >> "$GITHUB_OUTPUT"

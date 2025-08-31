@@ -70,15 +70,18 @@ jobs:
         id: docker_check
         run: |
           tag="${{ github.event.inputs.version || steps.check_release.outputs.tag }}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
 
+          # Check if we already published this tag to avoid rebuilding
           # Check GHCR
           ghcr_exists=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://ghcr.io/v2/danielmiessler/fabric/manifests/$tag" || echo "404")
+            "https://ghcr.io/v2/${owner}/fabric/manifests/$tag" || echo "404")
 
-          # Check Docker Hub
+          # Check Docker Hub (use configured Docker Hub username)
+          dh_user="${{ vars.DOCKERHUB_USERNAME }}"
           dh_exists=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://hub.docker.com/v2/repositories/danielmiessler/fabric/tags/$tag" || echo "404")
+            "https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag" || echo "404")
 
           if [ "$ghcr_exists" = "200" ] && [ "$dh_exists" = "200" ]; then
             echo "Docker images for $tag already exist in both registries, skipping..."
