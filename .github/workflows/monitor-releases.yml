@@ -75,7 +75,7 @@ jobs:
           # Check if we already published this tag to avoid rebuilding
           # Check GHCR
           ghcr_exists=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
             "https://ghcr.io/v2/${owner}/fabric/manifests/$tag" || echo "404")
 
           # Check Docker Hub (use configured Docker Hub username)
