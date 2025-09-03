@@ -14,14 +14,6 @@ while [[ $# -gt 0 ]]; do
         --checkout)
             CHECKOUT_MODE=true
             shift
-            if [[ $# -gt 1 ]]; then
-                OUTPUT_DIR="$2"
-                shift
-            else
-                echo "Error: --checkout requires an output directory"
-                echo "Usage: $0 --checkout <version_tag> <output_directory>"
-                exit 1
-            fi
             ;;
         -*)
             echo "Unknown option $1"
@@ -41,6 +33,16 @@ if [ -z "$1" ]; then
     echo "  $0 --dry-run v1.4.302                 # Test changes without modifying PR"
     echo "  $0 --checkout v1.4.302 ./pr-checkout  # Create minimal checkout for manual editing"
     exit 1
+fi
+
+# Handle checkout mode arguments
+if [ "$CHECKOUT_MODE" = true ]; then
+    if [ -z "$2" ]; then
+        echo "Error: --checkout requires an output directory"
+        echo "Usage: $0 --checkout <version_tag> <output_directory>"
+        exit 1
+    fi
+    OUTPUT_DIR="$2"
 fi
 
 tag="$1"
