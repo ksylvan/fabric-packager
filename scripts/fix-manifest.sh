@@ -3,11 +3,25 @@ set -e
 
 # Parse arguments
 DRY_RUN=false
+CHECKOUT_MODE=false
+OUTPUT_DIR=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dry-run)
             DRY_RUN=true
             shift
+            ;;
+        --checkout)
+            CHECKOUT_MODE=true
+            shift
+            if [[ $# -gt 1 ]]; then
+                OUTPUT_DIR="$2"
+                shift
+            else
+                echo "Error: --checkout requires an output directory"
+                echo "Usage: $0 --checkout <version_tag> <output_directory>"
+                exit 1
+            fi
             ;;
         -*)
             echo "Unknown option $1"
@@ -21,8 +35,11 @@ done
 
 if [ -z "$1" ]; then
     echo "Usage: $0 [--dry-run] <version_tag>"
-    echo "Example: $0 v1.4.302"
-    echo "         $0 --dry-run v1.4.302"
+    echo "       $0 --checkout <version_tag> <output_directory>"
+    echo "Examples:"
+    echo "  $0 v1.4.302                           # Fix manifest automatically"
+    echo "  $0 --dry-run v1.4.302                 # Test changes without modifying PR"
+    echo "  $0 --checkout v1.4.302 ./pr-checkout  # Create minimal checkout for manual editing"
     exit 1
 fi
 
@@ -33,7 +50,12 @@ if [ "$DRY_RUN" = true ]; then
     echo "🧪 DRY RUN MODE - No changes will be made to PRs, commits, or pushes"
 fi
 
-echo "🔧 Fixing WinGet manifest for version $version (tag: $tag)"
+if [ "$CHECKOUT_MODE" = true ]; then
+    echo "📥 CHECKOUT MODE - Creating minimal git repo for manual editing"
+    echo "🔧 Setting up checkout for WinGet manifest version $version (tag: $tag)"
+else
+    echo "🔧 Fixing WinGet manifest for version $version (tag: $tag)"
+fi
 
 # Step 1: Find the PR that was just created for this version
 echo "📋 Finding PR for danielmiessler.Fabric version $version..."
@@ -72,6 +94,69 @@ fi
 
 echo "📝 PR #$pr_number needs to be fixed"
 
+# Function to create minimal git repo and download manifest files
+setup_manifest_repo() {
+    local target_dir="$1"
+    local commit_msg="$2"
+
+    cd "$target_dir"
+
+    # Create minimal git repo structure and download files
+    mkdir -p "manifests/d/danielmiessler/Fabric/$version"
+
+    # Initialize git repo
+    git init
+    git config user.email "fix-manifest@script.local"
+    git config user.name "Fix Manifest Script"
+
+    # Download the manifest files directly from the GitHub API
+    local manifest_base_url="https://raw.githubusercontent.com/$pr_repo_owner/$pr_repo_name/$pr_branch/manifests/d/danielmiessler/Fabric/$version"
+
+    echo "📥 Downloading manifest files..."
+    for manifest_file in "danielmiessler.Fabric.installer.yaml" "danielmiessler.Fabric.locale.en-US.yaml" "danielmiessler.Fabric.yaml"; do
+        if curl -f -s "$manifest_base_url/$manifest_file" -o "manifests/d/danielmiessler/Fabric/$version/$manifest_file"; then
+            echo "✅ Downloaded $manifest_file"
+        else
+            echo "⚠️  Could not download $manifest_file (might not exist)"
+        fi
+    done
+
+    # Add files to git
+    git add .
+    git commit -m "$commit_msg"
+
+    # Configure git remote for pushing
+    echo "🔗 Configuring git remote for PR branch..."
+    git remote add origin "https://github.com/$pr_repo_owner/$pr_repo_name.git"
+    git checkout -b "$pr_branch"
+}
+
+# Handle checkout mode - create minimal repo and exit
+if [ "$CHECKOUT_MODE" = true ]; then
+    echo "📥 Creating minimal checkout in: $OUTPUT_DIR"
+
+    # Create output directory
+    mkdir -p "$OUTPUT_DIR"
+
+    setup_manifest_repo "$OUTPUT_DIR" "Initial manifest files from PR #$pr_number"
+
+    echo "✅ Checkout complete!"
+    echo "📂 Manifest files available in: $OUTPUT_DIR"
+    echo "📋 PR: #$pr_number ($pr_repo_owner/$pr_repo_name branch: $pr_branch)"
+    echo ""
+    echo "💡 To make changes:"
+    echo "   cd $OUTPUT_DIR"
+    echo "   # Edit manifest files as needed"
+    echo "   git add manifests/d/danielmiessler/Fabric/$version/"
+    echo "   git commit -m \"fix: your changes here\""
+    echo "   git push origin $pr_branch"
+    echo ""
+    echo "📁 Manifest files:"
+    ls -la "manifests/d/danielmiessler/Fabric/$version/"
+
+    exit 0
+fi
+
 # Step 2: Convert PR to draft mode
 if [ "$DRY_RUN" = true ]; then
     echo "📝 [DRY RUN] Would convert PR #$pr_number to draft mode"
@@ -98,56 +183,11 @@ trap cleanup EXIT INT TERM
 
 # Step 4: Checkout the PR branch directly
 echo "🔄 Checking out PR #$pr_number..."
-cd "$TEMP_DIR"
-
-# Get the PR details
-echo "🔍 Getting PR details..."
-pr_info=$(gh pr view "$pr_number" --repo microsoft/winget-pkgs --json headRefName,headRepository,headRepositoryOwner)
-
-if [ "$DRY_RUN" = true ]; then
-    echo "🐛 DEBUG: PR info JSON:"
-    echo "$pr_info"
-fi
-
-pr_branch=$(echo "$pr_info" | jq -r '.headRefName')
-pr_repo_owner=$(echo "$pr_info" | jq -r '.headRepositoryOwner.login')
-pr_repo_name=$(echo "$pr_info" | jq -r '.headRepository.name')
-
-echo "🐛 DEBUG: Extracted values: owner='$pr_repo_owner', name='$pr_repo_name', branch='$pr_branch'"
-
-# Handle null values (fallback to assuming it's in microsoft/winget-pkgs)
-if [ "$pr_repo_owner" = "null" ] || [ -z "$pr_repo_owner" ]; then
-    pr_repo_owner="microsoft"
-fi
-if [ "$pr_repo_name" = "null" ] || [ -z "$pr_repo_name" ]; then
-    pr_repo_name="winget-pkgs"
-fi
-
 echo "📥 Downloading manifest files from PR branch '$pr_branch' on $pr_repo_owner/$pr_repo_name..."
+
 # Create a minimal git repo structure and download just the files we need
-mkdir -p winget-pkgs/manifests/d/danielmiessler/Fabric/$version
-cd winget-pkgs
-
-# Initialize a minimal git repo so we can track changes
-git init
-git config user.email "fix-manifest@script.local"
-git config user.name "Fix Manifest Script"
-
-# Download the manifest files directly from the GitHub API
-manifest_base_url="https://raw.githubusercontent.com/$pr_repo_owner/$pr_repo_name/$pr_branch/manifests/d/danielmiessler/Fabric/$version"
-
-echo "📥 Downloading manifest files..."
-for manifest_file in "danielmiessler.Fabric.installer.yaml" "danielmiessler.Fabric.locale.en-US.yaml" "danielmiessler.Fabric.yaml"; do
-    if curl -f -s "$manifest_base_url/$manifest_file" -o "manifests/d/danielmiessler/Fabric/$version/$manifest_file"; then
-        echo "✅ Downloaded $manifest_file"
-    else
-        echo "⚠️  Could not download $manifest_file (might not exist)"
-    fi
-done
-
-# Add files to git so we can track changes
-git add .
-git commit -m "Initial manifest files from PR"
+mkdir -p "$TEMP_DIR/winget-pkgs"
+setup_manifest_repo "$TEMP_DIR/winget-pkgs" "Initial manifest files from PR"
 
 if [ "$DRY_RUN" = true ]; then
     echo "✅ [DRY RUN] PR checked out (read-only for inspection)"
@@ -199,7 +239,7 @@ else
 - Changed InstallerType from 'portable' to 'zip'
 - Updated manifest to properly support all three architectures (arm64, x64, i386)"
 
-    git push
+    git push origin "$pr_branch"
 fi
 
 # Step 9: Convert PR back to ready status

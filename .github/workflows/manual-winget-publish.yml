@@ -108,10 +108,7 @@ jobs:
 
       - name: Fix WinGet manifest for multi-architecture support
         run: |
-          # Install komac using cargo (pre-installed on ubuntu-latest)
-          cargo install --locked komac
-
-          # Run the fix script
+          # Run the fix script (komac already installed by previous step)
           ./scripts/fix-manifest.sh "${{ steps.parse.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}

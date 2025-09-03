@@ -82,6 +82,10 @@ jobs:
           echo "i386_url=$i386_url" >> $GITHUB_OUTPUT
           echo "urls=$(echo $all_urls | xargs)" >> $GITHUB_OUTPUT
 
+      - name: Checkout repository
+        if: steps.assets.outputs.winget_skip != 'true'
+        uses: actions/checkout@v4
+
       - name: Update WinGet manifest with all architectures
         if: steps.assets.outputs.winget_skip != 'true'
         uses: michidk/run-komac@v2
@@ -93,10 +97,7 @@ jobs:
       - name: Fix WinGet manifest for multi-architecture support
         if: steps.assets.outputs.winget_skip != 'true'
         run: |
-          # Install komac using cargo (pre-installed on ubuntu-latest)
-          cargo install --locked komac
-
-          # Run the fix script
+          # Run the fix script (komac already installed by previous step)
           ./scripts/fix-manifest.sh "${{ github.event.inputs.version || steps.check_release.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}

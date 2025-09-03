@@ -65,12 +65,19 @@ All workflows use a simple, reliable process:
 
 ### WinGet Publishing
 
-The `michidk/run-komac` action handles all the complexity:
+The WinGet publishing process consists of two steps:
 
-- Downloads and installs Komac
-- Manages winget-pkgs repository interactions
-- Creates and submits pull requests to microsoft/winget-pkgs
-- Handles authentication and error reporting
+1. **Initial manifest creation** - The `michidk/run-komac` action handles:
+   - Downloads and installs Komac
+   - Manages winget-pkgs repository interactions
+   - Creates and submits pull requests to microsoft/winget-pkgs
+   - Handles authentication and error reporting
+
+2. **Manifest correction** - The `scripts/fix-manifest.sh` script automatically:
+   - Fixes incorrect InstallerType from "portable" to "zip" for proper multi-architecture support
+   - Updates manifests to correctly support all three Windows architectures (arm64, x64, i386)
+   - Operates in an idempotent way (safe to run multiple times)
+   - Handles both draft and ready pull requests seamlessly
 
 ### Docker Publishing
 
@@ -80,6 +87,71 @@ The Docker workflows provide:
 - Simultaneous publishing to GHCR and Docker Hub
 - Automatic `:latest` tag management for newest releases
 - Duplicate detection to avoid unnecessary rebuilds
+
+## Tools and Scripts
+
+### Manifest Fixing Script (`scripts/fix-manifest.sh`)
+
+The manifest fixing script corrects WinGet manifests that are created with incorrect configuration by komac. It provides:
+
+**Key Features:**
+
+- **Automatic correction**: Changes InstallerType from "portable" to "zip" for proper Windows Package Manager support
+- **Multi-architecture support**: Ensures manifests work correctly with all three Windows architectures (arm64, x64, i386)
+- **Idempotent operation**: Safe to run multiple times - automatically detects and skips already-fixed manifests
+- **Dry-run mode**: Test changes without making any modifications to pull requests
+- **Checkout mode**: Create minimal git repository for manual manifest editing and testing
+
+**Usage:**
+
+```bash
+# Fix a manifest for a specific version
+./scripts/fix-manifest.sh v1.4.302
+
+# Test changes without modifying anything
+./scripts/fix-manifest.sh --dry-run v1.4.302
+
+# Create minimal checkout for manual editing
+./scripts/fix-manifest.sh --checkout v1.4.302 ./pr-checkout
+
+# Preserve temp directory for inspection (useful for debugging)
+CLEANUP_ON_EXIT=false ./scripts/fix-manifest.sh --dry-run v1.4.302
+```
+
+**How it works:**
+
+1. Finds the WinGet pull request for the specified version
+2. Checks if the manifest has already been fixed (idempotency check)
+3. Downloads only the necessary manifest files via GitHub's raw API (minimal footprint)
+4. Sets up minimal git repository with remote pointing to PR's head repository
+5. Generates corrected manifests using komac
+6. Replaces the installer manifest with the fixed version
+7. Commits and pushes changes directly to the PR branch
+8. Automatically cleans up temporary files
+
+**Minimal manifest checkout and git setup:**
+
+The script avoids downloading entire repositories by using a two-step approach:
+
+1. **Download only manifest files** via GitHub's raw file API:
+
+```bash
+# Downloads specific manifest files without full git clone
+manifest_base_url="https://raw.githubusercontent.com/$owner/$repo/$branch/manifests/d/danielmiessler/Fabric/$version"
+curl -f -s "$manifest_base_url/danielmiessler.Fabric.installer.yaml" -o "target/path"
+```
+
+1. **Minimal git setup for pushing changes**:
+
+```bash
+# Initialize minimal git repo and configure remote
+git init
+git remote add origin "https://github.com/$pr_repo_owner/$pr_repo_name.git"
+git checkout -b "$pr_branch"
+git push origin "$pr_branch"  # Push directly to PR branch
+```
+
+This approach avoids fetching the full repository history while still enabling push access to the original PR branch. Much faster and uses minimal disk space compared to traditional `git clone` operations.
 
 ## Workflows
 
@@ -92,7 +164,7 @@ Automatically checks for new Fabric releases every 3 hours and publishes them to
 - **Manual trigger**: Optional version parameter
 - **Process**:
   1. Checks GitHub API for latest release
-  2. Finds Windows assets → Submits to WinGet (if assets exist)
+  2. Finds Windows assets → Submits to WinGet → Fixes manifest for multi-architecture support (if assets exist)
   3. Checks Docker registries → Triggers Docker publishing (if images missing)
   4. Skips already-published releases automatically
 
@@ -102,7 +174,7 @@ User-friendly manual WinGet publishing for specific releases.
 
 - **Runs on**: Ubuntu runners
 - **Input**: GitHub release URL (e.g., `https://github.com/danielmiessler/fabric/releases/tag/v1.4.302`)
-- **Process**: Extracts version → Finds Windows assets → Submits to WinGet
+- **Process**: Extracts version → Finds Windows assets → Submits to WinGet → Fixes manifest for multi-architecture support
 
 ### 3. Manual Docker Publishing (`manual-docker-publish.yml`)
 
@@ -119,7 +191,7 @@ Immediate WinGet publishing triggered by external webhooks.
 
 - **Runs on**: Ubuntu runners
 - **Triggers**: Repository dispatch events (`fabric-winget-release`) or manual trigger with tag
-- **Process**: Uses provided tag → Finds Windows assets → Submits to WinGet
+- **Process**: Uses provided tag → Finds Windows assets → Submits to WinGet → Fixes manifest for multi-architecture support
 
 ### 5. Docker Webhook Publishing (`docker-publish.yml`)
 
@@ -219,6 +291,12 @@ To trigger immediate publishing from the main Fabric repository, add these steps
    - Check the Actions tab for detailed error logs
    - Ensure the release tag format matches expectations (e.g., `v1.4.302`)
 
+5. **Manifest fixing script issues**
+   - Script automatically skips already-fixed manifests (idempotent operation)
+   - Use `--dry-run` flag to test changes without modifying pull requests
+   - Set `CLEANUP_ON_EXIT=false` environment variable to preserve temp files for debugging
+   - Check that `GH_TOKEN` or `WINGET_TOKEN` has proper permissions for the microsoft/winget-pkgs repository
+
 ### Testing
 
 Test your WinGet package:
@@ -239,7 +317,8 @@ winget install danielmiessler.Fabric
 ### Key Components
 
 - **run-komac Action**: [michidk/run-komac@v2](https://github.com/michidk/run-komac) - Handles all Komac operations automatically
-- **Komac**: Modern WinGet manifest creation tool written in Rust (installed by the action)
+- **Komac**: Modern WinGet manifest creation tool written in Rust (installed via cargo)
+- **fix-manifest.sh**: Post-processing script that corrects komac-generated manifests for proper multi-architecture support
 - **Package identifier**: `danielmiessler.Fabric`
 - **Supported formats**: `.exe`, `.msi`, `.msix`, `.appx` installer files
 
