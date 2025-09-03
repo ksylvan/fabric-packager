@@ -70,32 +70,6 @@ fi
 
 echo "✅ Found PR #$pr_number"
 
-# Check if PR has already been fixed (idempotency check)
-echo "🔍 Checking if PR #$pr_number has already been fixed..."
-pr_commits=$(gh pr view "$pr_number" --repo microsoft/winget-pkgs --json commits --jq '.commits[].messageHeadline')
-
-if echo "$pr_commits" | grep -q "fix: multi-arch manifest for $tag"; then
-    echo "✅ PR #$pr_number has already been fixed with multi-arch manifest (found fix commit)"
-    echo "🎉 No action needed - manifest is already correct!"
-    exit 0
-fi
-
-# Double-check by examining the actual manifest content
-echo "🔍 Double-checking manifest content..."
-pr_info=$(gh pr view "$pr_number" --repo microsoft/winget-pkgs --json headRefName,headRepositoryOwner,headRepository)
-pr_branch=$(echo "$pr_info" | jq -r '.headRefName')
-pr_repo_owner=$(echo "$pr_info" | jq -r '.headRepositoryOwner.login // "microsoft"')
-pr_repo_name=$(echo "$pr_info" | jq -r '.headRepository.name // "winget-pkgs"')
-
-manifest_url="https://raw.githubusercontent.com/$pr_repo_owner/$pr_repo_name/$pr_branch/manifests/d/danielmiessler/Fabric/$version/danielmiessler.Fabric.installer.yaml"
-if curl -f -s "$manifest_url" | grep -q "InstallerType: zip"; then
-    echo "✅ PR #$pr_number already has correct InstallerType: zip"
-    echo "🎉 No action needed - manifest is already correct!"
-    exit 0
-fi
-
-echo "📝 PR #$pr_number needs to be fixed"
-
 # Function to create minimal git repo and download manifest files
 setup_manifest_repo() {
     local target_dir="$1"
@@ -133,15 +107,22 @@ setup_manifest_repo() {
     git checkout -b "$pr_branch"
 }
 
-# Handle checkout mode - create minimal repo and exit
+# Get PR details for all modes
+echo "🔍 Getting PR details..."
+pr_info=$(gh pr view "$pr_number" --repo microsoft/winget-pkgs --json headRefName,headRepositoryOwner,headRepository)
+pr_branch=$(echo "$pr_info" | jq -r '.headRefName')
+pr_repo_owner=$(echo "$pr_info" | jq -r '.headRepositoryOwner.login // "microsoft"')
+pr_repo_name=$(echo "$pr_info" | jq -r '.headRepository.name // "winget-pkgs"')
+
+# Handle checkout mode - always create checkout regardless of fix status
 if [ "$CHECKOUT_MODE" = true ]; then
     echo "📥 Creating minimal checkout in: $OUTPUT_DIR"
-
+    
     # Create output directory
     mkdir -p "$OUTPUT_DIR"
-
+    
     setup_manifest_repo "$OUTPUT_DIR" "Initial manifest files from PR #$pr_number"
-
+    
     echo "✅ Checkout complete!"
     echo "📂 Manifest files available in: $OUTPUT_DIR"
     echo "📋 PR: #$pr_number ($pr_repo_owner/$pr_repo_name branch: $pr_branch)"
@@ -155,9 +136,31 @@ if [ "$CHECKOUT_MODE" = true ]; then
     echo ""
     echo "📁 Manifest files:"
     ls -la "manifests/d/danielmiessler/Fabric/$version/"
-
+    
     exit 0
 fi
+
+# For non-checkout modes, check if PR has already been fixed (idempotency check)
+echo "🔍 Checking if PR #$pr_number has already been fixed..."
+pr_commits=$(gh pr view "$pr_number" --repo microsoft/winget-pkgs --json commits --jq '.commits[].messageHeadline')
+
+if echo "$pr_commits" | grep -q "fix: multi-arch manifest for $tag"; then
+    echo "✅ PR #$pr_number has already been fixed with multi-arch manifest (found fix commit)"
+    echo "🎉 No action needed - manifest is already correct!"
+    exit 0
+fi
+
+# Double-check by examining the actual manifest content
+echo "🔍 Double-checking manifest content..."
+manifest_url="https://raw.githubusercontent.com/$pr_repo_owner/$pr_repo_name/$pr_branch/manifests/d/danielmiessler/Fabric/$version/danielmiessler.Fabric.installer.yaml"
+if curl -f -s "$manifest_url" | grep -q "InstallerType: zip"; then
+    echo "✅ PR #$pr_number already has correct InstallerType: zip"
+    echo "🎉 No action needed - manifest is already correct!"
+    exit 0
+fi
+
+echo "📝 PR #$pr_number needs to be fixed"
+
 
 # Step 2: Convert PR to draft mode
 if [ "$DRY_RUN" = true ]; then
