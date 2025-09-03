@@ -90,6 +90,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
+      - name: Fix WinGet manifest for multi-architecture support
+        if: steps.assets.outputs.winget_skip != 'true'
+        run: |
+          # Install komac using cargo (pre-installed on ubuntu-latest)
+          cargo install --locked komac
+
+          # Run the fix script
+          ./scripts/fix-manifest.sh "${{ github.event.inputs.version || steps.check_release.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
       - name: Check if Docker images already exist
         id: docker_check
         run: |

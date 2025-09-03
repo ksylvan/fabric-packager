@@ -82,9 +82,22 @@ jobs:
           echo "i386_url=$i386_url" >> $GITHUB_OUTPUT
           echo "urls=$(echo $all_urls | xargs)" >> $GITHUB_OUTPUT
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Update WinGet manifest with all architectures
         uses: michidk/run-komac@v2
         with:
           args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.urls }} --submit"
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Fix WinGet manifest for multi-architecture support
+        run: |
+          # Install komac using cargo (pre-installed on ubuntu-latest)
+          cargo install --locked komac
+          
+          # Run the fix script
+          ./scripts/fix-manifest.sh "${{ steps.release_info.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
