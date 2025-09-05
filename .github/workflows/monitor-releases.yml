@@ -109,21 +109,46 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
 
           # Check if we already published this tag to avoid rebuilding
-          # Check GHCR
-          ghcr_exists=$(curl -s -o /dev/null -w "%{http_code}" \
+          echo "🔍 Checking if tag $tag exists in registries..."
+
+          # Check GHCR with better error handling
+          echo "Checking GHCR..."
+          ghcr_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
-            "https://ghcr.io/v2/${owner}/fabric/manifests/$tag" || echo "404")
+            "https://ghcr.io/v2/${owner}/fabric/manifests/$tag")
+          ghcr_status=$(echo "$ghcr_response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
 
-          # Check Docker Hub (use configured Docker Hub username)
+          # Debug GHCR response if not 200/404
+          if [ "$ghcr_status" != "200" ] && [ "$ghcr_status" != "404" ]; then
+            echo "GHCR response: $(echo "$ghcr_response" | sed 's/HTTPSTATUS:.*//' | head -c 200)"
+          fi
+
+          # Check Docker Hub with better error handling
+          echo "Checking Docker Hub..."
           dh_user="${{ vars.DOCKERHUB_USERNAME }}"
-          dh_exists=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag" || echo "404")
+          dh_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+            "https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag")
+          dh_status=$(echo "$dh_response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
 
-          if [ "$ghcr_exists" = "200" ] && [ "$dh_exists" = "200" ]; then
-            echo "Docker images for $tag already exist in both registries, skipping..."
+          echo "GHCR status: $ghcr_status, Docker Hub status: $dh_status"
+
+          # Decision logic with better error handling
+          if [ -z "$ghcr_status" ] || [ -z "$dh_status" ]; then
+            echo "⚠️ Failed to check registries (network issue), proceeding with build to be safe..."
+            echo "docker_skip=false" >> $GITHUB_OUTPUT
+          elif [ "$ghcr_status" = "401" ] || [ "$ghcr_status" = "403" ]; then
+            echo "⚠️ GHCR authentication failed (check GHCR_TOKEN scope), proceeding with build..."
+            echo "docker_skip=false" >> $GITHUB_OUTPUT
+          elif [ "$ghcr_status" = "200" ] && [ "$dh_status" = "200" ]; then
+            echo "✅ Tag $tag already exists in both registries, skipping build entirely!"
             echo "docker_skip=true" >> $GITHUB_OUTPUT
+          elif [ "$ghcr_status" = "200" ] || [ "$dh_status" = "200" ]; then
+            echo "⚠️ Tag $tag exists in one registry but not both, proceeding with build..."
+            echo "  - GHCR: $([ "$ghcr_status" = "200" ] && echo "EXISTS" || echo "missing")"
+            echo "  - Docker Hub: $([ "$dh_status" = "200" ] && echo "EXISTS" || echo "missing")"
+            echo "docker_skip=false" >> $GITHUB_OUTPUT
           else
-            echo "Docker images for $tag missing from at least one registry, proceeding..."
+            echo "🚀 Tag $tag does not exist in either registry, proceeding with build..."
             echo "docker_skip=false" >> $GITHUB_OUTPUT
           fi
 
