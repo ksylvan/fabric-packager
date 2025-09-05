@@ -111,10 +111,11 @@ jobs:
           # Check if we already published this tag to avoid rebuilding
           echo "🔍 Checking if tag $tag exists in registries..."
 
-          # Check GHCR with better error handling
+          # Check GHCR with the same token used for publishing
           echo "Checking GHCR..."
+          echo "URL: https://ghcr.io/v2/${owner}/fabric/manifests/$tag"
           ghcr_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
             "https://ghcr.io/v2/${owner}/fabric/manifests/$tag")
           ghcr_status=$(echo "$ghcr_response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
 
@@ -126,6 +127,7 @@ jobs:
           # Check Docker Hub with better error handling
           echo "Checking Docker Hub..."
           dh_user="${{ vars.DOCKERHUB_USERNAME }}"
+          echo "URL: https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag"
           dh_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
             "https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag")
           dh_status=$(echo "$dh_response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
