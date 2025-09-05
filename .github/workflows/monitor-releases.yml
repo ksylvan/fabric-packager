@@ -114,7 +114,7 @@ jobs:
           # Check GHCR with better error handling
           echo "Checking GHCR..."
           ghcr_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://ghcr.io/v2/${owner}/fabric/manifests/$tag")
           ghcr_status=$(echo "$ghcr_response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
 
