@@ -18,15 +18,12 @@ permissions:
   packages: write # needed for GHCR with GITHUB_TOKEN
 
 jobs:
-  manual-docker-publish:
+  check-existing:
     runs-on: ubuntu-latest
-
     outputs:
-      is_latest: ${{ steps.latest.outputs.is_latest }}
-      current_tag: ${{ steps.latest.outputs.current_tag }}
-      owner_lc: ${{ steps.vars.outputs.owner_lc }}
-      repo_lc: ${{ steps.vars.outputs.repo_lc }}
-      dockerhub_user_lc: ${{ steps.dh.outputs.user_lc }}
+      should_skip: ${{ steps.check_exists.outputs.skip }}
+      tag: ${{ steps.parse.outputs.tag }}
+      url: ${{ steps.parse.outputs.url }}
 
     steps:
       - name: Parse Release Information
@@ -84,40 +81,48 @@ jobs:
             "https://hub.docker.com/v2/repositories/${dh_user,,}/fabric/tags/$tag" || echo "404")
 
           if [ "$ghcr_exists" = "200" ] && [ "$dh_exists" = "200" ]; then
-            echo "Tag $tag already exists in both registries, skipping..."
+            echo "✅ Tag $tag already exists in both registries, skipping build entirely!"
             echo "skip=true" >> $GITHUB_OUTPUT
-            exit 0
           elif [ "$ghcr_exists" = "200" ] || [ "$dh_exists" = "200" ]; then
-            echo "Tag $tag exists in one registry but not both, proceeding with build..."
+            echo "⚠️ Tag $tag exists in one registry but not both, proceeding with build..."
+            echo "skip=false" >> $GITHUB_OUTPUT
           else
-            echo "Tag $tag does not exist in either registry, proceeding with build..."
+            echo "🚀 Tag $tag does not exist in either registry, proceeding with build..."
+            echo "skip=false" >> $GITHUB_OUTPUT
           fi
-          echo "skip=false" >> $GITHUB_OUTPUT
 
+  manual-docker-publish:
+    needs: check-existing
+    if: needs.check-existing.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+
+    outputs:
+      is_latest: ${{ steps.latest.outputs.is_latest }}
+      current_tag: ${{ steps.latest.outputs.current_tag }}
+      owner_lc: ${{ steps.vars.outputs.owner_lc }}
+      repo_lc: ${{ steps.vars.outputs.repo_lc }}
+      dockerhub_user_lc: ${{ steps.dh.outputs.user_lc }}
+
+    steps:
       - name: Checkout Fabric repository
-        if: steps.check_exists.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           repository: danielmiessler/fabric
-          ref: ${{ steps.parse.outputs.tag }}
+          ref: ${{ needs.check-existing.outputs.tag }}
           fetch-depth: 0
 
       - name: Fetch all tags
-        if: steps.check_exists.outputs.skip != 'true'
         run: git fetch --tags --force
 
       # More reliable cross-builds
       - name: Set up QEMU
-        if: steps.check_exists.outputs.skip != 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.check_exists.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
 
       # Compute lowercase owner/repo for registry image names
       - name: Compute image names
-        if: steps.check_exists.outputs.skip != 'true'
         id: vars
         run: |
           OWNER="${GITHUB_REPOSITORY_OWNER}"
@@ -127,7 +132,6 @@ jobs:
 
       # Lowercase Docker Hub username (belt & suspenders)
       - name: Lowercase Docker Hub username
-        if: steps.check_exists.outputs.skip != 'true'
         id: dh
         run: echo "user_lc=${DOCKERHUB_USERNAME,,}" >> "$GITHUB_OUTPUT"
         env:
@@ -135,11 +139,10 @@ jobs:
 
       # Determine if the current tag is the highest vX.Y.Z (no pre-releases)
       - name: Is this the latest semver tag?
-        if: steps.check_exists.outputs.skip != 'true'
         id: latest
         shell: bash
         run: |
-          CTAG="${{ steps.parse.outputs.tag }}"
+          CTAG="${{ needs.check-existing.outputs.tag }}"
           LATEST="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
           echo "current_tag=$CTAG" >> "$GITHUB_OUTPUT"
           echo "latest_tag=$LATEST" >> "$GITHUB_OUTPUT"
@@ -151,7 +154,6 @@ jobs:
 
       # Login to GHCR (uses PAT for cross-repo package write)
       - name: Log in to GHCR
-        if: steps.check_exists.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -160,7 +162,6 @@ jobs:
 
       # Login to Docker Hub
       - name: Log in to Docker Hub
-        if: steps.check_exists.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ steps.dh.outputs.user_lc }}
@@ -168,7 +169,6 @@ jobs:
 
       # Generate versioned tags/labels for BOTH registries (no :latest here)
       - name: Extract metadata (tags, labels)
-        if: steps.check_exists.outputs.skip != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -176,14 +176,13 @@ jobs:
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ steps.vars.outputs.repo_lc }}
             docker.io/${{ steps.dh.outputs.user_lc }}/${{ steps.vars.outputs.repo_lc }}
           tags: |
-            type=raw,value=${{ steps.parse.outputs.tag }}
-            type=semver,pattern={{version}},value=${{ steps.parse.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.parse.outputs.tag }}
+            type=raw,value=${{ needs.check-existing.outputs.tag }}
+            type=semver,pattern={{version}},value=${{ needs.check-existing.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.check-existing.outputs.tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/danielmiessler/fabric
 
       - name: Build and push (multi-arch)
-        if: steps.check_exists.outputs.skip != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -225,14 +224,14 @@ jobs:
 
       - name: Tag :latest on GHCR
         run: |
-          tag="${{ needs.manual-docker-publish.outputs.current_tag }}"
+          tag="${{ needs.check-existing.outputs.tag }}"
           SRC="ghcr.io/${{ needs.manual-docker-publish.outputs.owner_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:$tag"
           DST="ghcr.io/${{ needs.manual-docker-publish.outputs.owner_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:latest"
           docker buildx imagetools create -t "$DST" "$SRC"
 
       - name: Tag :latest on Docker Hub
         run: |
-          tag="${{ needs.manual-docker-publish.outputs.current_tag }}"
+          tag="${{ needs.check-existing.outputs.tag }}"
           SRC="docker.io/${{ needs.manual-docker-publish.outputs.dockerhub_user_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:$tag"
           DST="docker.io/${{ needs.manual-docker-publish.outputs.dockerhub_user_lc }}/${{ needs.manual-docker-publish.outputs.repo_lc }}:latest"
           docker buildx imagetools create -t "$DST" "$SRC"
