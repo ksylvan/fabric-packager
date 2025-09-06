@@ -93,13 +93,13 @@ jobs:
           version="${{ steps.assets.outputs.version }}"
           echo "🔍 Checking for existing merged WinGet PR for version $version..."
 
-          # Search for merged PRs with the version in title/body
-          pr_search=$(gh search prs \
+          # Search for merged PRs with the version in title/body using pr list
+          pr_search=$(gh pr list \
             --repo microsoft/winget-pkgs \
             --state merged \
             --limit 10 \
-            --json number,title,createdAt,mergedAt \
-            "danielmiessler.Fabric $version" || echo "[]")
+            --search "danielmiessler.Fabric $version" \
+            --json number,title,createdAt,mergedAt || echo "[]")
 
           # Check if any results found
           pr_count=$(echo "$pr_search" | jq '. | length')
