@@ -86,8 +86,37 @@ jobs:
         if: steps.assets.outputs.winget_skip != 'true'
         uses: actions/checkout@v4
 
-      - name: Update WinGet manifest with all architectures
+      - name: Check if WinGet PR already exists for this version
         if: steps.assets.outputs.winget_skip != 'true'
+        id: winget_pr_check
+        run: |
+          version="${{ steps.assets.outputs.version }}"
+          echo "🔍 Checking for existing merged WinGet PR for version $version..."
+
+          # Search for merged PRs with the version in title/body
+          pr_search=$(gh search prs \
+            --repo microsoft/winget-pkgs \
+            --state merged \
+            --limit 10 \
+            --json number,title,createdAt,mergedAt \
+            "danielmiessler.Fabric $version" || echo "[]")
+
+          # Check if any results found
+          pr_count=$(echo "$pr_search" | jq '. | length')
+
+          if [ "$pr_count" -gt 0 ]; then
+            echo "✅ Found $pr_count existing merged PR(s) for danielmiessler.Fabric $version"
+            echo "$pr_search" | jq -r '.[] | "- PR #\(.number): \(.title) (merged: \(.mergedAt))"'
+            echo "winget_pr_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 No existing merged PR found for danielmiessler.Fabric $version, proceeding..."
+            echo "winget_pr_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Update WinGet manifest with all architectures
+        if: steps.assets.outputs.winget_skip != 'true' && steps.winget_pr_check.outputs.winget_pr_exists != 'true'
         uses: michidk/run-komac@v2
         with:
           args: "update danielmiessler.Fabric --version ${{ steps.assets.outputs.version }} --urls ${{ steps.assets.outputs.urls }} --submit"
@@ -95,7 +124,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
       - name: Fix WinGet manifest for multi-architecture support
-        if: steps.assets.outputs.winget_skip != 'true'
+        if: steps.assets.outputs.winget_skip != 'true' && steps.winget_pr_check.outputs.winget_pr_exists != 'true'
         run: |
           # Run the fix script (komac already installed by previous step)
           ./scripts/fix-manifest.sh "${{ github.event.inputs.version || steps.check_release.outputs.tag }}"
