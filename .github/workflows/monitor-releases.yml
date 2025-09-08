@@ -123,13 +123,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
-      - name: Fix WinGet manifest for multi-architecture support
-        if: steps.assets.outputs.winget_skip != 'true' && steps.winget_pr_check.outputs.winget_pr_exists != 'true'
-        run: |
-          # Run the fix script (komac already installed by previous step)
-          ./scripts/fix-manifest.sh "${{ github.event.inputs.version || steps.check_release.outputs.tag }}"
-        env:
-          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
       - name: Check if Docker images already exist
         id: docker_check
