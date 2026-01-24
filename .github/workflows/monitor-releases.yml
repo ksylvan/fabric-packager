@@ -42,7 +42,14 @@ jobs:
           echo "Using tag: $tag"
 
           # Get release info from danielmiessler/fabric
-          release_info=$(curl -s "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag")
+          release_info=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/danielmiessler/fabric/releases/tags/$tag")
+
+          # Validate API response before parsing
+          if ! echo "$release_info" | jq -e '.assets' > /dev/null 2>&1; then
+            echo "::error::Failed to fetch valid release info from GitHub API for tag $tag"
+            echo "API Response: $release_info"
+            exit 1
+          fi
 
           # Extract Windows asset URLs by architecture for better detection
           arm64_url=$(echo "$release_info" | jq -r '.assets[] | select(.name | test("_Windows_arm64\\.(zip|exe|msi|msix|appx)$")) | .browser_download_url')
