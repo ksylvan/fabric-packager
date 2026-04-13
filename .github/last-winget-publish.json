@@ -1,7 +1,7 @@
 {
-  "version": null,
-  "tag": null,
-  "published_at": null,
-  "workflow_run_id": null,
-  "workflow_run_url": null
+  "version": "1.4.445",
+  "tag": "v1.4.445",
+  "published_at": "2026-04-13T05:33:44Z",
+  "workflow_run_id": "24327382293",
+  "workflow_run_url": "https://github.com/ksylvan/fabric-packager/actions/runs/24327382293"
 }
