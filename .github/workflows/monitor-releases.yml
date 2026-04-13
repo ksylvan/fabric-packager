@@ -98,25 +98,25 @@ jobs:
         id: winget_pr_check
         run: |
           version="${{ steps.assets.outputs.version }}"
-          echo "🔍 Checking for existing merged WinGet PR for version $version..."
+          echo "🔍 Checking for existing open or merged WinGet PR for version $version..."
 
-          # Search for merged PRs with the version in title/body using pr list
+          # Search for open or merged PRs to avoid duplicate submissions
           pr_search=$(gh pr list \
             --repo microsoft/winget-pkgs \
-            --state merged \
+            --state all \
             --limit 10 \
             --search "danielmiessler.Fabric $version" \
-            --json number,title,createdAt,mergedAt || echo "[]")
+            --json number,title,state,createdAt,mergedAt || echo "[]")
 
           # Check if any results found
           pr_count=$(echo "$pr_search" | jq '. | length')
 
           if [ "$pr_count" -gt 0 ]; then
-            echo "✅ Found $pr_count existing merged PR(s) for danielmiessler.Fabric $version"
-            echo "$pr_search" | jq -r '.[] | "- PR #\(.number): \(.title) (merged: \(.mergedAt))"'
+            echo "✅ Found $pr_count existing PR(s) for danielmiessler.Fabric $version"
+            echo "$pr_search" | jq -r '.[] | "- PR #\(.number): \(.title) [\(.state)] (created: \(.createdAt))"'
             echo "winget_pr_exists=true" >> $GITHUB_OUTPUT
           else
-            echo "🚀 No existing merged PR found for danielmiessler.Fabric $version, proceeding..."
+            echo "🚀 No existing PR found for danielmiessler.Fabric $version, proceeding..."
             echo "winget_pr_exists=false" >> $GITHUB_OUTPUT
           fi
         env:
