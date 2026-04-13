@@ -20,6 +20,8 @@ on:
 jobs:
   publish-to-winget:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Extract release information
@@ -98,3 +100,26 @@ jobs:
           ./scripts/fix-manifest.sh "${{ steps.release_info.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Record WinGet publish metadata
+        run: |
+          tag="${{ steps.release_info.outputs.tag }}"
+          version="${{ steps.assets.outputs.version }}"
+          jq -n \
+            --arg version "$version" \
+            --arg tag "$tag" \
+            --arg published_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{version: $version, tag: $tag, published_at: $published_at, workflow_run_id: $run_id, workflow_run_url: $run_url}' \
+            > .github/last-winget-publish.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/last-winget-publish.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: record WinGet publish for $tag [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME:-main}"
+            git push
+          fi
