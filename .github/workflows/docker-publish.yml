@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           CTAG="${{ needs.check-existing.outputs.tag }}"
-          LATEST="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
+          LATEST="$(git for-each-ref --count=1 --sort=-v:refname --format='%(refname:short)' 'refs/tags/v[0-9]*.[0-9]*.[0-9]*')"
           echo "current_tag=$CTAG" >> "$GITHUB_OUTPUT"
           echo "latest_tag=$LATEST" >> "$GITHUB_OUTPUT"
           if [[ "$CTAG" == "$LATEST" ]]; then
